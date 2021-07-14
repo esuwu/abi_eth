@@ -1,7 +1,6 @@
 package fourbyte
 
 import (
-	"crypto/sha256"
 	"os"
 	"time"
 )
@@ -9,7 +8,6 @@ import (
 type asset struct {
 	bytes  []byte
 	info   os.FileInfo
-	digest [sha256.Size]byte
 }
 
 
@@ -51,7 +49,7 @@ func _4byteJson() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "4byte.json", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x97, 0xc1, 0x67, 0x6, 0x1e, 0x89, 0x76, 0xf7, 0x19, 0xd6, 0x8b, 0x43, 0xb4, 0x1c, 0xf6, 0xab, 0x7f, 0xc7, 0xc4, 0xca, 0x25, 0x21, 0x2, 0x13, 0x6d, 0x5b, 0xe2, 0x72, 0xb1, 0x7, 0xbc, 0x77}}
+	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
 
@@ -59,5 +57,9 @@ func _4byteJsonBytes() ([]byte, error) {
 	return __4byteJson, nil
 }
 var __4byteJson = []byte(`{
-"a9059cbb": "transfer(address,uint256)"
+"a9059cbb": "transfer(address,uint256)",
+"23b872dd": "transferFrom(address,address,uint256)",
+"ddf252ad": "Transfer(address,address,uint256)"
 }`)
+
+// "beabacc8": "transfer(address,address,uint256)",

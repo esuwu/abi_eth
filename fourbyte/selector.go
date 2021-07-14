@@ -14,19 +14,6 @@ import (
 	"strings"
 )
 
-// Database is a 4byte database with the possibility of maintaining an immutable
-// set (embedded) into the process and a mutable set (loaded and written to file).
-type Database struct {
-	embedded   map[string]string
-	custom     map[string]string
-	customPath string
-}
-
-// New loads the standard signature database embedded in the package.
-func New() (*Database, error) {
-	return NewWithFile("")
-}
-
 
 // It returns an error if the asset could not be found or
 // could not be loaded.
@@ -111,14 +98,6 @@ type decodedArgument struct {
 	value   interface{}
 }
 
-// decodedCallData is an internal type to represent a method call parsed according
-// to an ABI method signature.
-type decodedCallData struct {
-	signature string
-	name      string
-	inputs    []decodedArgument
-}
-
 // String implements stringer interface, tries to use the underlying value-type
 func (arg decodedArgument) String() string {
 	var value string
@@ -129,6 +108,14 @@ func (arg decodedArgument) String() string {
 		value = fmt.Sprintf("%v", val)
 	}
 	return fmt.Sprintf("%v: %v", arg.soltype.Type.String(), value)
+}
+
+// decodedCallData is an internal type to represent a method call parsed according
+// to an ABI method signature.
+type decodedCallData struct {
+	signature string
+	name      string
+	inputs    []decodedArgument
 }
 
 // String implements stringer interface for decodedCallData
@@ -198,6 +185,19 @@ func verifySelector(selector string, calldata []byte) (*decodedCallData, error) 
 	}
 	// Parse the call data according to the requested selector
 	return parseCallData(calldata, string(abidata))
+}
+
+// Database is a 4byte database with the possibility of maintaining an immutable
+// set (embedded) into the process and a mutable set (loaded and written to file).
+type Database struct {
+	embedded   map[string]string
+	custom     map[string]string
+	customPath string
+}
+
+// New loads the standard signature database embedded in the package.
+func New() (*Database, error) {
+	return NewWithFile("")
 }
 
 // This method does not validate the match, it's assumed the caller will do.

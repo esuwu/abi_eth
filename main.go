@@ -14,7 +14,7 @@ func parse(data []byte) (*fourbyte.DecodedCallData, error){
 	if err != nil {
 		fmt.Println(err)
 	}
-	decodedData, err := db.ParseCallData(nil, data)
+	decodedData, err := db.ParseCallData(data)
 	return decodedData, err
 }
 

@@ -207,7 +207,7 @@ func (db *Database) Selector(id []byte) (string, error) {
 
 	// ValidateCallData checks if the ABI call-data + method selector (if given) can
 // be parsed and seems to match.
-func (db *Database) ParseCallData(selector *string, data []byte) (*DecodedCallData, error) {
+func (db *Database) ParseCallData(data []byte) (*DecodedCallData, error) {
 
 	// If the data is empty, we have a plain value transfer, nothing more to do
 	if len(data) == 0 {
@@ -220,16 +220,6 @@ func (db *Database) ParseCallData(selector *string, data []byte) (*DecodedCallDa
 	if n := len(data) - 4; n%32 != 0 {
 		return nil, errors.Errorf("transaction data is not valid ABI (length should be a multiple of 32 (was %d))", n)
 	}
-	// If a custom method selector was provided, validate with that
-	if selector != nil {
-		info, err := verifySelector(*selector, data)
-		if err != nil {
-			return nil, errors.Errorf("transaction contains data, but provided ABI signature could not be matched: %v", err)
-		}
-		db.AddSelector(*selector, data[:4])
-		return info, nil
-	}
-	// No method selector was provided, check the database for embedded ones
 	embedded, err := db.Selector(data[:4])
 	if err != nil {
 		return nil, errors.Errorf("Transaction contains data, but the ABI signature could not be found: %v", err)
@@ -240,26 +230,6 @@ func (db *Database) ParseCallData(selector *string, data []byte) (*DecodedCallDa
 	}
 	return info, nil
 
-}
-
-func (db *Database) AddSelector(selector string, data []byte) error {
-	// If the selector is already known, skip duplicating it
-	if len(data) < 4 {
-		return nil
-	}
-	if _, err := db.Selector(data[:4]); err == nil {
-		return nil
-	}
-	// Inject the custom selector into the database and persist if needed
-	db.custom[hex.EncodeToString(data[:4])] = selector
-	if db.customPath == "" {
-		return nil
-	}
-	blob, err := json.Marshal(db.custom)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(db.customPath, blob, 0600)
 }
 
 // verifySelector checks whether the ABI encoded data blob matches the requested

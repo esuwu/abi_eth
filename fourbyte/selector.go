@@ -5,50 +5,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/abi_eth/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"io/ioutil"
-	"os"
+	"github.com/pkg/errors"
 	"regexp"
 	"strings"
 )
 
-
-// It returns an error if the asset could not be found or
-// could not be loaded.
-func Asset(name string) ([]byte, error) {
-	canonicalName := strings.Replace(name, "\\", "/", -1)
-	if f, ok := _bindata[canonicalName]; ok {
-		a, err := f()
-		if err != nil {
-			return nil, fmt.Errorf("Asset %s can't read by error: %v", name, err)
-		}
-		return a.bytes, nil
-	}
-	return nil, fmt.Errorf("Asset %s not found", name)
-}
-
 func NewWithFile(path string) (*Database, error) {
 	db := &Database{make(map[string]string), make(map[string]string), path}
-	db.customPath = path
+	db.embedded = __4byteJson
 
-	blob, err := Asset("4byte.json")
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(blob, &db.embedded); err != nil {
-		return nil, err
-	}
-	// Custom file may not exist. Will be created during save, if needed.
-	if _, err := os.Stat(path); err == nil {
-		if blob, err = ioutil.ReadFile(path); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(blob, &db.custom); err != nil {
-			return nil, err
-		}
-	}
 	return db, nil
 }
 
@@ -94,40 +61,40 @@ func parseSelector(unescapedSelector string) ([]byte, error) {
 // decodedArgument is an internal type to represent an argument parsed according
 // to an ABI method signature.
 type decodedArgument struct {
-	soltype abi.Argument
-	value   interface{}
+	Soltype abi.Argument
+	Value   interface{}
 }
 
 // String implements stringer interface, tries to use the underlying value-type
 func (arg decodedArgument) String() string {
 	var value string
-	switch val := arg.value.(type) {
+	switch val := arg.Value.(type) {
 	case fmt.Stringer:
 		value = val.String()
 	default:
 		value = fmt.Sprintf("%v", val)
 	}
-	return fmt.Sprintf("%v: %v", arg.soltype.Type.String(), value)
+	return fmt.Sprintf("%v: %v", arg.Soltype.Type.String(), value)
 }
 
 // decodedCallData is an internal type to represent a method call parsed according
 // to an ABI method signature.
-type decodedCallData struct {
-	signature string
-	name      string
-	inputs    []decodedArgument
+type DecodedCallData struct {
+	Signature string
+	Name      string
+	Inputs    []decodedArgument
 }
 
 // String implements stringer interface for decodedCallData
-func (cd decodedCallData) String() string {
-	args := make([]string, len(cd.inputs))
-	for i, arg := range cd.inputs {
+func (cd DecodedCallData) String() string {
+	args := make([]string, len(cd.Inputs))
+	for i, arg := range cd.Inputs {
 		args[i] = arg.String()
 	}
-	return fmt.Sprintf("%s(%s)", cd.name, strings.Join(args, ","))
+	return fmt.Sprintf("%s(%s)", cd.Name, strings.Join(args, ","))
 }
 
-func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, error) {
+func parseCallData(calldata []byte, unescapedAbidata string) (*DecodedCallData, error) {
 	// Validate the call data that it has the 4byte prefix and the rest divisible by 32 bytes
 	if len(calldata) < 4 {
 		return nil, fmt.Errorf("invalid call data, incomplete method signature (%d bytes < 4)", len(calldata))
@@ -152,11 +119,11 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 		return nil, fmt.Errorf("signature %q matches, but arguments mismatch: %v", method.String(), err)
 	}
 	// Everything valid, assemble the call infos for the signer
-	decoded := decodedCallData{signature: method.Sig, name: method.RawName}
+	decoded := DecodedCallData{Signature: method.Sig, Name: method.RawName}
 	for i := 0; i < len(method.Inputs); i++ {
-		decoded.inputs = append(decoded.inputs, decodedArgument{
-			soltype: method.Inputs[i],
-			value:   values[i],
+		decoded.Inputs = append(decoded.Inputs, decodedArgument{
+			Soltype: method.Inputs[i],
+			Value:   values[i],
 		})
 	}
 	// We're finished decoding the data. At this point, we encode the decoded data
@@ -175,18 +142,6 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*decodedCallData, 
 	return &decoded, nil
 }
 
-// verifySelector checks whether the ABI encoded data blob matches the requested
-// function signature.
-func verifySelector(selector string, calldata []byte) (*decodedCallData, error) {
-	// Parse the selector into an ABI JSON spec
-	abidata, err := parseSelector(selector)
-	if err != nil {
-		return nil, err
-	}
-	// Parse the call data according to the requested selector
-	return parseCallData(calldata, string(abidata))
-}
-
 // Database is a 4byte database with the possibility of maintaining an immutable
 // set (embedded) into the process and a mutable set (loaded and written to file).
 type Database struct {
@@ -199,6 +154,8 @@ type Database struct {
 func New() (*Database, error) {
 	return NewWithFile("")
 }
+
+
 
 // This method does not validate the match, it's assumed the caller will do.
 func (db *Database) Selector(id []byte) (string, error) {
@@ -217,59 +174,39 @@ func (db *Database) Selector(id []byte) (string, error) {
 
 	// ValidateCallData checks if the ABI call-data + method selector (if given) can
 // be parsed and seems to match.
-func (db *Database) ValidateCallData(selector *string, data []byte, messages *types.ValidationMessages) {
+func (db *Database) ParseCallData(data []byte) (*DecodedCallData, error) {
 
 	// If the data is empty, we have a plain value transfer, nothing more to do
 	if len(data) == 0 {
-		return
+		return nil, errors.New("transaction doesn't contain data")
 	}
 	// Validate the call data that it has the 4byte prefix and the rest divisible by 32 bytes
 	if len(data) < 4 {
-		messages.Warn("Transaction data is not valid ABI (missing the 4 byte call prefix)")
-		return
+		return nil, errors.New("transaction data is not valid ABI: missing the 4 byte call prefix")
 	}
 	if n := len(data) - 4; n%32 != 0 {
-		messages.Warn(fmt.Sprintf("Transaction data is not valid ABI (length should be a multiple of 32 (was %d))", n))
+		return nil, errors.Errorf("transaction data is not valid ABI (length should be a multiple of 32 (was %d))", n)
 	}
-	// If a custom method selector was provided, validate with that
-	if selector != nil {
-		if info, err := verifySelector(*selector, data); err != nil {
-			messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be matched: %v", err))
-		} else {
-			messages.Info(fmt.Sprintf("Transaction invokes the following method: %q", info.String()))
-			db.AddSelector(*selector, data[:4])
-		}
-		return
-	}
-	// No method selector was provided, check the database for embedded ones
 	embedded, err := db.Selector(data[:4])
 	if err != nil {
-		messages.Warn(fmt.Sprintf("Transaction contains data, but the ABI signature could not be found: %v", err))
-		return
+		return nil, errors.Errorf("Transaction contains data, but the ABI signature could not be found: %v", err)
 	}
-	if info, err := verifySelector(embedded, data); err != nil {
-		messages.Warn(fmt.Sprintf("Transaction contains data, but provided ABI signature could not be verified: %v", err))
-	} else {
-		messages.Info(fmt.Sprintf("Transaction invokes the following method: %q", info.String()))
+	info, err := verifySelector(embedded, data)
+	if err != nil {
+		return nil, errors.Errorf("Transaction contains data, but provided ABI signature could not be verified: %v", err)
 	}
+	return info, nil
+
 }
 
-func (db *Database) AddSelector(selector string, data []byte) error {
-	// If the selector is already known, skip duplicating it
-	if len(data) < 4 {
-		return nil
-	}
-	if _, err := db.Selector(data[:4]); err == nil {
-		return nil
-	}
-	// Inject the custom selector into the database and persist if needed
-	db.custom[hex.EncodeToString(data[:4])] = selector
-	if db.customPath == "" {
-		return nil
-	}
-	blob, err := json.Marshal(db.custom)
+// verifySelector checks whether the ABI encoded data blob matches the requested
+// function signature.
+func verifySelector(selector string, calldata []byte) (*DecodedCallData, error) {
+	// Parse the selector into an ABI JSON spec
+	abidata, err := parseSelector(selector)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return ioutil.WriteFile(db.customPath, blob, 0600)
+	// Parse the call data according to the requested selector
+	return parseCallData(calldata, string(abidata))
 }

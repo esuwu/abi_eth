@@ -31,6 +31,8 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println(decodedData.Inputs[0].Value)
+	fmt.Println(decodedData.Inputs[1].Value)
 	fmt.Println(decodedData)
 
 }

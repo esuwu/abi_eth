@@ -8,47 +8,14 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"io/ioutil"
-	"os"
 	"regexp"
 	"strings"
 )
 
-
-// It returns an error if the asset could not be found or
-// could not be loaded.
-func Asset(name string) ([]byte, error) {
-	canonicalName := strings.Replace(name, "\\", "/", -1)
-	if f, ok := _bindata[canonicalName]; ok {
-		a, err := f()
-		if err != nil {
-			return nil, fmt.Errorf("Asset %s can't read by error: %v", name, err)
-		}
-		return a.bytes, nil
-	}
-	return nil, fmt.Errorf("Asset %s not found", name)
-}
-
 func NewWithFile(path string) (*Database, error) {
 	db := &Database{make(map[string]string), make(map[string]string), path}
-	db.customPath = path
+	db.embedded = __4byteJson
 
-	blob, err := Asset("4byte.json")
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(blob, &db.embedded); err != nil {
-		return nil, err
-	}
-	// Custom file may not exist. Will be created during save, if needed.
-	if _, err := os.Stat(path); err == nil {
-		if blob, err = ioutil.ReadFile(path); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(blob, &db.custom); err != nil {
-			return nil, err
-		}
-	}
 	return db, nil
 }
 
@@ -94,37 +61,37 @@ func parseSelector(unescapedSelector string) ([]byte, error) {
 // decodedArgument is an internal type to represent an argument parsed according
 // to an ABI method signature.
 type decodedArgument struct {
-	soltype abi.Argument
-	value   interface{}
+	Soltype abi.Argument
+	Value   interface{}
 }
 
 // String implements stringer interface, tries to use the underlying value-type
 func (arg decodedArgument) String() string {
 	var value string
-	switch val := arg.value.(type) {
+	switch val := arg.Value.(type) {
 	case fmt.Stringer:
 		value = val.String()
 	default:
 		value = fmt.Sprintf("%v", val)
 	}
-	return fmt.Sprintf("%v: %v", arg.soltype.Type.String(), value)
+	return fmt.Sprintf("%v: %v", arg.Soltype.Type.String(), value)
 }
 
 // decodedCallData is an internal type to represent a method call parsed according
 // to an ABI method signature.
 type DecodedCallData struct {
-	signature string
-	name      string
-	inputs    []decodedArgument
+	Signature string
+	Name      string
+	Inputs    []decodedArgument
 }
 
 // String implements stringer interface for decodedCallData
 func (cd DecodedCallData) String() string {
-	args := make([]string, len(cd.inputs))
-	for i, arg := range cd.inputs {
+	args := make([]string, len(cd.Inputs))
+	for i, arg := range cd.Inputs {
 		args[i] = arg.String()
 	}
-	return fmt.Sprintf("%s(%s)", cd.name, strings.Join(args, ","))
+	return fmt.Sprintf("%s(%s)", cd.Name, strings.Join(args, ","))
 }
 
 func parseCallData(calldata []byte, unescapedAbidata string) (*DecodedCallData, error) {
@@ -152,11 +119,11 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*DecodedCallData, 
 		return nil, fmt.Errorf("signature %q matches, but arguments mismatch: %v", method.String(), err)
 	}
 	// Everything valid, assemble the call infos for the signer
-	decoded := DecodedCallData{signature: method.Sig, name: method.RawName}
+	decoded := DecodedCallData{Signature: method.Sig, Name: method.RawName}
 	for i := 0; i < len(method.Inputs); i++ {
-		decoded.inputs = append(decoded.inputs, decodedArgument{
-			soltype: method.Inputs[i],
-			value:   values[i],
+		decoded.Inputs = append(decoded.Inputs, decodedArgument{
+			Soltype: method.Inputs[i],
+			Value:   values[i],
 		})
 	}
 	// We're finished decoding the data. At this point, we encode the decoded data

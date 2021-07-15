@@ -12,13 +12,6 @@ import (
 	"strings"
 )
 
-func NewWithFile(path string) (*Database, error) {
-	db := &Database{make(map[string]string), make(map[string]string), path}
-	db.embedded = __4byteJson
-
-	return db, nil
-}
-
 // selectorRegexp is used to validate that a 4byte database selector corresponds
 // to a valid ABI function declaration.
 //
@@ -147,12 +140,14 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*DecodedCallData, 
 type Database struct {
 	embedded   map[string]string
 	custom     map[string]string
-	customPath string
 }
 
 // New loads the standard signature database embedded in the package.
-func New() (*Database, error) {
-	return NewWithFile("")
+func NewDatabase() (*Database, error) {
+	db := &Database{make(map[string]string), make(map[string]string)}
+	db.embedded = __4byteJson
+
+	return db, nil
 }
 
 

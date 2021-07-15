@@ -10,7 +10,7 @@ import (
 
 
 func parse(data []byte) (*fourbyte.DecodedCallData, error){
-	db, err := fourbyte.New()
+	db, err := fourbyte.NewDatabase()
 	if err != nil {
 		fmt.Println(err)
 	}

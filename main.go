@@ -4,22 +4,18 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/abi_eth/fourbyte"
-	"github.com/abi_eth/types"
 	"strings"
 )
 
 
 
-func parse(data []byte) {
+func parse(data []byte) (*fourbyte.DecodedCallData, error){
 	db, err := fourbyte.New()
 	if err != nil {
 		fmt.Println(err)
 	}
-	messages := types.ValidationMessages{}
-	db.ValidateCallData(nil, data, &messages)
-	for _, m := range messages.Messages {
-		fmt.Printf("%v: %v\n", m.Typ, m.Message)
-	}
+	decodedData, err := db.ParseCallData(nil, data)
+	return decodedData, err
 }
 
 // Example
@@ -31,6 +27,10 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	parse(data)
+	decodedData, err := parse(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(decodedData)
 
 }

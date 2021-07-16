@@ -50,16 +50,29 @@ func parseSelector(unescapedSelector string) ([]byte, error) {
 	return json.Marshal([]fakeABI{{name, "function", arguments}})
 }
 
-
-// decodedArgument is an internal type to represent an argument parsed according
+// ethDecodedArgument is an internal type to represent an argument parsed according
 // to an ABI method signature.
-type decodedArgument struct {
+type ethDecodedArgument struct {
 	Soltype abi.Argument
 	Value   interface{}
 }
 
+func (arg *ethDecodedArgument) DecodedValue() interface{} {
+	return arg.Value
+}
+
+func (arg *ethDecodedArgument) InternalType() byte {
+	return arg.Soltype.Type.T
+}
+
+type ArgDecoded interface {
+	fmt.Stringer
+	DecodedValue() interface{}
+	InternalType() byte
+}
+
 // String implements stringer interface, tries to use the underlying value-type
-func (arg decodedArgument) String() string {
+func (arg ethDecodedArgument) String() string {
 	var value string
 	switch val := arg.Value.(type) {
 	case fmt.Stringer:
@@ -70,12 +83,12 @@ func (arg decodedArgument) String() string {
 	return fmt.Sprintf("%v: %v", arg.Soltype.Type.String(), value)
 }
 
-// decodedCallData is an internal type to represent a method call parsed according
+// DecodedCallData is an internal type to represent a method call parsed according
 // to an ABI method signature.
 type DecodedCallData struct {
 	Signature string
 	Name      string
-	Inputs    []decodedArgument
+	Inputs    []ArgDecoded
 }
 
 // String implements stringer interface for decodedCallData
@@ -114,7 +127,7 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*DecodedCallData, 
 	// Everything valid, assemble the call infos for the signer
 	decoded := DecodedCallData{Signature: method.Sig, Name: method.RawName}
 	for i := 0; i < len(method.Inputs); i++ {
-		decoded.Inputs = append(decoded.Inputs, decodedArgument{
+		decoded.Inputs = append(decoded.Inputs, &ethDecodedArgument{
 			Soltype: method.Inputs[i],
 			Value:   values[i],
 		})
@@ -138,8 +151,8 @@ func parseCallData(calldata []byte, unescapedAbidata string) (*DecodedCallData, 
 // Database is a 4byte database with the possibility of maintaining an immutable
 // set (embedded) into the process and a mutable set (loaded and written to file).
 type Database struct {
-	embedded   map[string]string
-	custom     map[string]string
+	embedded map[string]string
+	custom   map[string]string
 }
 
 // New loads the standard signature database embedded in the package.
@@ -149,8 +162,6 @@ func NewDatabase() (*Database, error) {
 
 	return db, nil
 }
-
-
 
 // This method does not validate the match, it's assumed the caller will do.
 func (db *Database) Selector(id []byte) (string, error) {
@@ -167,7 +178,15 @@ func (db *Database) Selector(id []byte) (string, error) {
 	return "", fmt.Errorf("signature %v not found", sig)
 }
 
-	// ValidateCallData checks if the ABI call-data + method selector (if given) can
+func (db *Database) MethodBySelector(id Selector) (Method, error) {
+	if method, ok := erc20Methods[id]; ok {
+		return method, nil
+	}
+	// TODO(nickeskov): support ride scripts metadata
+	return Method{}, fmt.Errorf("signature %v not found", id.String())
+}
+
+// ValidateCallData checks if the ABI call-data + method selector (if given) can
 // be parsed and seems to match.
 func (db *Database) ParseCallData(data []byte) (*DecodedCallData, error) {
 
@@ -194,14 +213,85 @@ func (db *Database) ParseCallData(data []byte) (*DecodedCallData, error) {
 
 }
 
+func (db *Database) ParseCallDataNew(data []byte) (*DecodedCallData, error) {
+	// If the data is empty, we have a plain value transfer, nothing more to do
+	if len(data) == 0 {
+		return nil, errors.New("transaction doesn't contain data")
+	}
+	// Validate the call data that it has the 4byte prefix and the rest divisible by 32 bytes
+	if len(data) < 4 {
+		return nil, errors.New("transaction data is not valid ABI: missing the 4 byte call prefix")
+	}
+	if n := len(data) - 4; n%32 != 0 {
+		return nil, errors.Errorf("transaction data is not valid ABI (length should be a multiple of 32 (was %d))", n)
+	}
+	var selector Selector
+	copy(selector[:], data[:len(selector)])
+	method, err := db.MethodBySelector(selector)
+	if err != nil {
+		return nil, errors.Errorf("Transaction contains data, but the ABI signature could not be found: %v", err)
+	}
+
+	info, err := parseArgData(&method, data[len(selector):])
+	if err != nil {
+		return nil, errors.Errorf("Transaction contains data, but provided ABI signature could not be verified: %v", err)
+	}
+	return info, nil
+}
+
 // verifySelector checks whether the ABI encoded data blob matches the requested
 // function signature.
-func verifySelector(selector string, calldata []byte) (*DecodedCallData, error) {
-	// Parse the selector into an ABI JSON spec
-	abidata, err := parseSelector(selector)
+func verifySelector(functionSignature string, calldata []byte) (*DecodedCallData, error) {
+	// Parse the functionSignature into an ABI JSON spec
+	abidata, err := parseSelector(functionSignature)
 	if err != nil {
 		return nil, err
 	}
-	// Parse the call data according to the requested selector
+	// Parse the call data according to the requested functionSignature
 	return parseCallData(calldata, string(abidata))
+}
+
+type decodedArg struct {
+	Soltype Argument
+	Value   interface{}
+}
+
+func (da *decodedArg) String() string {
+	var value string
+	switch val := da.Value.(type) {
+	case fmt.Stringer:
+		value = val.String()
+	default:
+		value = fmt.Sprintf("%v", val)
+	}
+	return fmt.Sprintf("%v: %v", da.Soltype.Type.String(), value)
+}
+
+func (da *decodedArg) DecodedValue() interface{} {
+	return da.Value
+}
+
+func (da *decodedArg) InternalType() byte {
+	return byte(da.Soltype.Type.T)
+}
+
+func parseArgData(method *Method, argData []byte) (*DecodedCallData, error) {
+	//method, err := abi.MethodById(selector)
+	//if err != nil {
+	//	return nil, errors.Wrapf(err, "failed to get method by id, id=%s", selector.String())
+	//}
+	values, err := method.Inputs.UnpackValues(argData)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to unpack Inputs arguments ABI data")
+	}
+
+	// TODO(nickeskov): use our types
+	decoded := DecodedCallData{Signature: method.Sig.String(), Name: method.RawName}
+	for i := 0; i < len(method.Inputs); i++ {
+		decoded.Inputs = append(decoded.Inputs, &decodedArg{
+			Soltype: method.Inputs[i],
+			Value:   values[i],
+		})
+	}
+	return &decoded, nil
 }

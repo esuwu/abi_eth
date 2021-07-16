@@ -7,14 +7,21 @@ import (
 	"strings"
 )
 
-
-
-func parse(data []byte) (*fourbyte.DecodedCallData, error){
+func parse(data []byte) (*fourbyte.DecodedCallData, error) {
 	db, err := fourbyte.NewDatabase()
 	if err != nil {
 		fmt.Println(err)
 	}
 	decodedData, err := db.ParseCallData(data)
+	return decodedData, err
+}
+
+func parseNew(data []byte) (*fourbyte.DecodedCallData, error) {
+	db, err := fourbyte.NewDatabase()
+	if err != nil {
+		fmt.Println(err)
+	}
+	decodedData, err := db.ParseCallDataNew(data)
 	return decodedData, err
 }
 
@@ -31,8 +38,18 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(decodedData.Inputs[0].Value)
-	fmt.Println(decodedData.Inputs[1].Value)
+	fmt.Println(decodedData.Inputs[0].DecodedValue())
+	fmt.Println(decodedData.Inputs[1].DecodedValue())
 	fmt.Println(decodedData)
+
+	fmt.Printf("\n\n ------------------------ \n\n")
+
+	decodedDataNew, err := parseNew(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(decodedDataNew.Inputs[0].DecodedValue())
+	fmt.Println(decodedDataNew.Inputs[1].DecodedValue())
+	fmt.Println(decodedDataNew)
 
 }

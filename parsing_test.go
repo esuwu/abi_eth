@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/hex"
-	"github.com/ethereum/go-ethereum/common"
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"math/big"
 	"strings"
@@ -14,7 +14,7 @@ func TestTransfer(t *testing.T) {
 
 	expectedSignature := "transfer(address,uint256)"
 	expectedName := "transfer"
-	expectedFirstArg := common.HexToAddress("0x9a1989946ae4249aac19ac7a038d24aab03c3d8c")
+	expectedFirstArg := "0x9a1989946ae4249AAC19ac7a038d24Aab03c3D8c"
 	expectedSecondArg := "209470300000000000000000"
 
 	hexdata := "0xa9059cbb0000000000000000000000009a1989946ae4249aac19ac7a038d24aab03c3d8c000000000000000000000000000000000000000000002c5b68601cc92ad60000"
@@ -25,7 +25,7 @@ func TestTransfer(t *testing.T) {
 
 	require.Equal(t, expectedSignature, callData.Signature)
 	require.Equal(t, expectedName, callData.Name)
-	require.Equal(t, expectedFirstArg, callData.Inputs[0].DecodedValue())
+	require.Equal(t, expectedFirstArg, callData.Inputs[0].DecodedValue().(fmt.Stringer).String())
 	require.Equal(t, expectedSecondArg, callData.Inputs[1].DecodedValue().(*big.Int).String())
 }
 
